@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.helpdesk.admin.role.mapper.RoleMapper">
+
+    <!-- 권한 목록 조회 -->
+    <sql id="selectRoleListSql">
+        SELECT
+            R.role_seq,
+            R.role_code,
+            R.role_nm,
+            R.sys_id,
+            (SELECT COUNT(*) FROM TB_USER_ROLE_MAP WHERE role_code = R.role_code) AS user_cnt,
+            ROW_NUMBER() OVER(ORDER BY R.role_code) AS rsn
+        FROM TB_ROLE_INFO R
+        WHERE R.sys_id = #{sysId}
+        <if test="keyword != null and keyword != ''">
+            AND (R.role_nm LIKE CONCAT('%', #{keyword}, '%')
+              OR CAST(R.role_code AS VARCHAR) LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="selectRoleList" parameterType="map" resultType="map">
+        SELECT PL.* FROM (
+            SELECT PO.* FROM ( <include refid="selectRoleListSql"/> ) PO
+        ) PL
+        WHERE rsn &gt; #{minSn} AND rsn &lt;= #{maxSn}
+    </select>
+
+    <select id="selectRoleListCount" parameterType="map" resultType="int">
+        SELECT COUNT(*) FROM TB_ROLE_INFO
+        WHERE sys_id = #{sysId}
+        <if test="keyword != null and keyword != ''">
+            AND (role_nm LIKE CONCAT('%', #{keyword}, '%')
+              OR CAST(role_code AS VARCHAR) LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <!-- 권한 상세 조회 -->
+    <select id="selectRoleInfo" parameterType="map" resultType="map">
+        SELECT * FROM TB_ROLE_INFO WHERE role_code = #{roleCode}
+    </select>
+
+    <!-- 권한 등록 -->
+    <insert id="insertRoleInfo" parameterType="map">
+        INSERT INTO TB_ROLE_INFO (
+            role_code, role_nm, sys_id
+        ) VALUES (
+            #{roleCode}, #{roleNm}, #{sysId}
+        )
+    </insert>
+
+    <!-- 권한 수정 -->
+    <update id="updateRoleInfo" parameterType="map">
+        UPDATE TB_ROLE_INFO SET
+            role_nm = #{roleNm}
+        WHERE role_code = #{roleCode}
+    </update>
+
+    <!-- 권한 삭제 -->
+    <delete id="deleteRoleInfo" parameterType="map">
+        DELETE FROM TB_ROLE_INFO WHERE role_code = #{roleCode}
+    </delete>
+
+    <!-- 사용자 권한 목록 -->
+    <select id="selectUserRoleList" parameterType="map" resultType="map">
+        SELECT
+            URM.user_role_seq,
+            URM.user_id,
+            URM.role_code,
+            URM.sys_id,
+            U.user_nm,
+            U.dept_nm,
+            R.role_nm
+        FROM TB_USER_ROLE_MAP URM
+        JOIN TB_USER_INFO U ON URM.user_id = U.user_id
+        JOIN TB_ROLE_INFO R ON URM.role_code = R.role_code
+        WHERE URM.role_code = #{roleCode}
+        ORDER BY U.user_nm
+    </select>
+
+    <!-- 사용자 권한 등록 -->
+    <insert id="insertUserRoleMap" parameterType="map">
+        INSERT INTO TB_USER_ROLE_MAP (
+            user_id, role_code, sys_id
+        ) VALUES (
+            #{userId}, #{roleCode}, #{sysId}
+        )
+    </insert>
+
+    <!-- 사용자 권한 삭제 -->
+    <delete id="deleteUserRoleMap" parameterType="map">
+        DELETE FROM TB_USER_ROLE_MAP
+        WHERE user_id = #{userId} AND role_code = #{roleCode}
+    </delete>
+
+    <!-- 그룹 권한 목록 -->
+    <select id="selectGroupRoleList" parameterType="map" resultType="map">
+        SELECT * FROM TB_GROUP_ROLE_MAP WHERE role_code = #{roleCode}
+    </select>
+
+</mapper>

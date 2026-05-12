@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.helpdesk.admin.popup.mapper.PopupMapper">
+
+    <!-- 팝업 목록 조회 -->
+    <sql id="selectPopupListSql">
+        SELECT
+            P.popup_seq,
+            P.popup_title,
+            P.popup_type,
+            P.display_type,
+            P.popup_width,
+            P.popup_height,
+            P.pos_left,
+            P.pos_top,
+            P.link_url,
+            P.new_window_yn,
+            P.close_btn_yn,
+            P.all_yn,
+            P.hide_yn,
+            PSM.sys_id,
+            PSM.begin_dt,
+            PSM.end_dt,
+            PSM.use_yn,
+            ROW_NUMBER() OVER(ORDER BY P.popup_seq DESC) AS rsn
+        FROM TB_POPUP_INFO P
+        LEFT JOIN TB_POPUP_SYS_MAP PSM ON P.popup_seq = PSM.popup_seq
+        WHERE 1=1
+        <if test="sysId != null and sysId != ''">
+            AND PSM.sys_id = #{sysId}
+        </if>
+        <if test="useYn != null and useYn != ''">
+            AND PSM.use_yn = #{useYn}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND P.popup_title LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+    </sql>
+
+    <select id="selectPopupList" parameterType="map" resultType="map">
+        SELECT PL.* FROM (
+            SELECT PO.* FROM ( <include refid="selectPopupListSql"/> ) PO
+        ) PL
+        WHERE rsn &gt; #{minSn} AND rsn &lt;= #{maxSn}
+    </select>
+
+    <select id="selectPopupListCount" parameterType="map" resultType="int">
+        SELECT COUNT(*) FROM (
+            <include refid="selectPopupListSql"/>
+        ) AS T
+    </select>
+
+    <!-- 팝업 상세 조회 -->
+    <select id="selectPopupInfo" parameterType="map" resultType="map">
+        SELECT * FROM TB_POPUP_INFO WHERE popup_seq = #{popupSeq}
+    </select>
+
+    <!-- 팝업 시스템 매핑 조회 -->
+    <select id="selectPopupSysMapList" parameterType="map" resultType="map">
+        SELECT
+            PSM.popup_sys_seq,
+            PSM.popup_seq,
+            PSM.sys_id,
+            PSM.sys_nm,
+            PSM.begin_dt,
+            PSM.end_dt,
+            PSM.begin_time,
+            PSM.end_time,
+            PSM.use_yn,
+            PSM.sort_order
+        FROM TB_POPUP_SYS_MAP PSM
+        WHERE PSM.popup_seq = #{popupSeq}
+        ORDER BY PSM.sort_order
+    </select>
+
+    <!-- 팝업 등록 -->
+    <insert id="insertPopupInfo" parameterType="map" useGeneratedKeys="true" keyProperty="popupSeq">
+        INSERT INTO TB_POPUP_INFO (
+            popup_title, popup_type, display_type,
+            image_path, image_nm,
+            popup_width, popup_height, pos_left, pos_top,
+            link_url, new_window_yn, popup_template,
+            close_btn_yn, file_id, image_id,
+            popup_content, all_yn, hide_yn
+        ) VALUES (
+            #{popupTitle}, #{popupType}, #{displayType},
+            #{imagePath}, #{imageNm},
+            #{popupWidth}, #{popupHeight}, #{posLeft}, #{posTop},
+            #{linkUrl}, #{newWindowYn}, #{popupTemplate},
+            #{closeBtnYn}, #{fileId}, #{imageId},
+            #{popupContent}, #{allYn}, #{hideYn}
+        )
+    </insert>
+
+    <!-- 팝업 시스템 매핑 등록 -->
+    <insert id="insertPopupSysMap" parameterType="map">
+        INSERT INTO TB_POPUP_SYS_MAP (
+            popup_seq, sys_id, sys_nm,
+            begin_dt, end_dt, begin_time, end_time,
+            use_yn, sort_order
+        ) VALUES (
+            #{popupSeq}, #{sysId}, #{sysNm},
+            #{beginDt}, #{endDt}, #{beginTime}, #{endTime},
+            'Y', #{sortOrder}
+        )
+    </insert>
+
+    <!-- 팝업 수정 -->
+    <update id="updatePopupInfo" parameterType="map">
+        UPDATE TB_POPUP_INFO SET
+            popup_title = #{popupTitle},
+            popup_type = #{popupType},
+            display_type = #{displayType},
+            image_path = #{imagePath},
+            image_nm = #{imageNm},
+            popup_width = #{popupWidth},
+            popup_height = #{popupHeight},
+            pos_left = #{posLeft},
+            pos_top = #{posTop},
+            link_url = #{linkUrl},
+            new_window_yn = #{newWindowYn},
+            popup_template = #{popupTemplate},
+            close_btn_yn = #{closeBtnYn},
+            popup_content = #{popupContent},
+            all_yn = #{allYn},
+            hide_yn = #{hideYn}
+        WHERE popup_seq = #{popupSeq}
+    </update>
+
+    <!-- 팝업 시스템 매핑 수정 -->
+    <update id="updatePopupSysMap" parameterType="map">
+        UPDATE TB_POPUP_SYS_MAP SET
+            begin_dt = #{beginDt},
+            end_dt = #{endDt},
+            begin_time = #{beginTime},
+            end_time = #{endTime},
+            use_yn = #{useYn},
+            sort_order = #{sortOrder}
+        WHERE popup_sys_seq = #{popupSysSeq}
+    </update>
+
+    <!-- 팝업 삭제 -->
+    <delete id="deletePopupInfo" parameterType="map">
+        DELETE FROM TB_POPUP_INFO WHERE popup_seq = #{popupSeq}
+    </delete>
+
+    <!-- 팝업 시스템 매핑 삭제 -->
+    <delete id="deletePopupSysMap" parameterType="map">
+        DELETE FROM TB_POPUP_SYS_MAP WHERE popup_seq = #{popupSeq}
+    </delete>
+
+    <!-- 활성 팝업 목록 (사용자용) -->
+    <select id="selectActivePopupList" parameterType="map" resultType="map">
+        SELECT
+            P.popup_seq,
+            P.popup_title,
+            P.popup_type,
+            P.display_type,
+            P.popup_width,
+            P.popup_height,
+            P.pos_left,
+            P.pos_top,
+            P.link_url,
+            P.new_window_yn,
+            P.popup_content,
+            PSM.begin_dt,
+            PSM.end_dt
+        FROM TB_POPUP_INFO P
+        JOIN TB_POPUP_SYS_MAP PSM ON P.popup_seq = PSM.popup_seq
+        WHERE PSM.sys_id = #{sysId}
+          AND PSM.use_yn = 'Y'
+          AND P.hide_yn = 'N'
+          AND GETDATE() BETWEEN PSM.begin_dt AND PSM.end_dt
+        ORDER BY PSM.sort_order
+    </select>
+
+</mapper>

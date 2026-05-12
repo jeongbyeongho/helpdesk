@@ -1,0 +1,66 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  datasource:
+    url: jdbc:sqlserver://localhost:1433;databaseName=helpdesk;encrypt=false;trustServerCertificate=true;characterEncoding=UTF-8;sendStringParametersAsUnicode=true;
+    username: appUser
+    password: xlqm4968632@
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 60000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  mvc:
+    view:
+      prefix: /WEB-INF/views/
+      suffix: .jsp
+    static-path-pattern: /static/**
+  web:
+    resources:
+      static-locations: classpath:/static/,classpath:/public/
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 1000MB
+      max-request-size: 1000MB
+
+  security:
+    enabled: false  # 커스텀 세션 인증 사용
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    default-fetch-size: 100
+    default-statement-timeout: 30
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+# 파일 업로드 경로
+file:
+  upload-path: D:/helpdesk/upload
+  allowed-ext: jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx,ppt,pptx,hwp,txt,zip
+  max-size: 1000000000
+
+# 시스템 설정
+system:
+  main-page: /main
+  password-change-cycle: 6
+  aes-secret-key: HelpdeskAesSecret
+
+logging:
+  level:
+    com.helpdesk: DEBUG
+    org.mybatis: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

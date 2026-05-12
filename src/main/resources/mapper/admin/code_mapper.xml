@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.helpdesk.admin.code.mapper.CodeMapper">
+
+    <!-- 코드그룹 목록 조회 -->
+    <sql id="selectCodeGroupListSql">
+        SELECT
+            CG.code_group,
+            CG.code_group_nm,
+            CG.code_group_desc,
+            CG.use_yn,
+            (SELECT COUNT(*) FROM TB_CODE_DETAIL_INFO WHERE code_group = CG.code_group AND use_yn = 'Y') AS code_cnt,
+            ROW_NUMBER() OVER(ORDER BY CG.code_group) AS rsn
+        FROM TB_CODE_GROUP_INFO CG
+        WHERE CG.use_yn = 'Y'
+        <if test="keyword != null and keyword != ''">
+            AND (CG.code_group_nm LIKE CONCAT('%', #{keyword}, '%')
+              OR CG.code_group LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="selectCodeGroupList" parameterType="map" resultType="map">
+        SELECT PL.* FROM (
+            SELECT PO.* FROM ( <include refid="selectCodeGroupListSql"/> ) PO
+        ) PL
+        WHERE rsn &gt; #{minSn} AND rsn &lt;= #{maxSn}
+    </select>
+
+    <select id="selectCodeGroupListCount" parameterType="map" resultType="int">
+        SELECT COUNT(*) FROM TB_CODE_GROUP_INFO
+        WHERE use_yn = 'Y'
+        <if test="keyword != null and keyword != ''">
+            AND (code_group_nm LIKE CONCAT('%', #{keyword}, '%')
+              OR code_group LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <!-- 코드그룹 상세 조회 -->
+    <select id="selectCodeGroupInfo" parameterType="map" resultType="map">
+        SELECT * FROM TB_CODE_GROUP_INFO WHERE code_group = #{codeGroup}
+    </select>
+
+    <!-- 코드그룹 등록 -->
+    <insert id="insertCodeGroupInfo" parameterType="map">
+        INSERT INTO TB_CODE_GROUP_INFO (
+            code_group, code_group_nm, code_group_desc, use_yn
+        ) VALUES (
+            #{codeGroup}, #{codeGroupNm}, #{codeGroupDesc}, 'Y'
+        )
+    </insert>
+
+    <!-- 코드그룹 수정 -->
+    <update id="updateCodeGroupInfo" parameterType="map">
+        UPDATE TB_CODE_GROUP_INFO SET
+            code_group_nm = #{codeGroupNm},
+            code_group_desc = #{codeGroupDesc},
+            use_yn = #{useYn}
+        WHERE code_group = #{codeGroup}
+    </update>
+
+    <!-- 코드그룹 삭제 -->
+    <update id="deleteCodeGroupInfo" parameterType="map">
+        UPDATE TB_CODE_GROUP_INFO SET use_yn = 'N' WHERE code_group = #{codeGroup}
+    </update>
+
+    <!-- 코드 상세 목록 조회 -->
+    <select id="selectCodeDetailList" parameterType="map" resultType="map">
+        SELECT
+            code_group,
+            code_value,
+            code_nm,
+            code_desc,
+            use_yn,
+            sort_order
+        FROM TB_CODE_DETAIL_INFO
+        WHERE code_group = #{codeGroup}
+          AND use_yn = 'Y'
+        ORDER BY sort_order, code_value
+    </select>
+
+    <!-- 코드 상세 조회 -->
+    <select id="selectCodeDetailInfo" parameterType="map" resultType="map">
+        SELECT * FROM TB_CODE_DETAIL_INFO
+        WHERE code_group = #{codeGroup} AND code_value = #{codeValue}
+    </select>
+
+    <!-- 코드 상세 등록 -->
+    <insert id="insertCodeDetailInfo" parameterType="map">
+        INSERT INTO TB_CODE_DETAIL_INFO (
+            code_group, code_value, code_nm, code_desc, use_yn, sort_order
+        ) VALUES (
+            #{codeGroup}, #{codeValue}, #{codeNm}, #{codeDesc}, 'Y', #{sortOrder}
+        )
+    </insert>
+
+    <!-- 코드 상세 수정 -->
+    <update id="updateCodeDetailInfo" parameterType="map">
+        UPDATE TB_CODE_DETAIL_INFO SET
+            code_nm = #{codeNm},
+            code_desc = #{codeDesc},
+            use_yn = #{useYn},
+            sort_order = #{sortOrder}
+        WHERE code_group = #{codeGroup} AND code_value = #{codeValue}
+    </update>
+
+    <!-- 코드 상세 삭제 -->
+    <update id="deleteCodeDetailInfo" parameterType="map">
+        UPDATE TB_CODE_DETAIL_INFO SET use_yn = 'N'
+        WHERE code_group = #{codeGroup}
+        <if test="codeValue != null and codeValue != ''">
+            AND code_value = #{codeValue}
+        </if>
+    </update>
+
+    <!-- 다음 정렬순서 조회 -->
+    <select id="selectNextSortOrder" parameterType="map" resultType="int">
+        SELECT ISNULL(MAX(sort_order), 0) + 1
+        FROM TB_CODE_DETAIL_INFO
+        WHERE code_group = #{codeGroup}
+    </select>
+
+    <!-- 코드 상세 순서 변경 -->
+    <update id="updateCodeDetailOrder" parameterType="map">
+        UPDATE TB_CODE_DETAIL_INFO SET
+            sort_order = #{sortOrder}
+        WHERE code_group = #{codeGroup} AND code_value = #{codeValue}
+    </update>
+
+</mapper>

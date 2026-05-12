@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.helpdesk.admin.member.mapper.MemberMapper">
+
+    <!-- 사용자 목록 조회 SQL -->
+    <sql id="selectMemberListSql">
+        SELECT
+            U.user_seq,
+            U.user_id,
+            U.user_nm,
+            U.mobile_no,
+            U.dept_nm,
+            U.tel_no,
+            U.email,
+            U.reg_dt,
+            UT.user_type_seq,
+            UT.user_type,
+            UT.org_code,
+            UT.org_nm,
+            UT.org_type,
+            UT.dept_code,
+            ISNULL(UT.approval_yn, 'Y') AS approval_yn,
+            UT.approval_user_nm,
+            UT.approval_dt,
+            RM.role_code,
+            S.sys_id,
+            S.sys_nm
+        FROM TB_USER_INFO U
+        LEFT JOIN TB_USER_TYPE_INFO UT ON U.user_id = UT.user_id
+        LEFT JOIN TB_USER_ROLE_MAP RM ON U.user_id = RM.user_id
+        LEFT JOIN TB_SYS_INFO S ON UT.org_code = S.org_code
+        WHERE 1 = 1
+        <if test="sysId != null and sysId != ''">
+            AND S.sys_id = #{sysId}
+        </if>
+        <if test="approvalYn != null and approvalYn != ''">
+            AND ISNULL(UT.approval_yn, 'Y') = #{approvalYn}
+        </if>
+        <if test="userType != null and userType != ''">
+            AND UT.user_type = #{userType}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (U.user_nm LIKE CONCAT('%', #{keyword}, '%')
+              OR U.user_id LIKE CONCAT('%', #{keyword}, '%')
+              OR S.sys_nm LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <!-- 사용자 목록 (페이징) -->
+    <select id="selectMemberList" parameterType="map" resultType="map">
+        SELECT PL.*
+        FROM (
+            SELECT PO.*, ROW_NUMBER() OVER(ORDER BY user_seq DESC) AS rsn
+            FROM ( <include refid="selectMemberListSql"/> ) PO
+        ) PL
+        WHERE rsn &gt; #{minSn} AND rsn &lt;= #{maxSn}
+    </select>
+
+    <!-- 사용자 목록 전체 건수 -->
+    <select id="selectMemberListCount" parameterType="map" resultType="int">
+        SELECT COUNT(*) FROM ( <include refid="selectMemberListSql"/> ) A
+    </select>
+
+    <!-- 사용자 상세 조회 -->
+    <select id="selectMemberInfo" parameterType="map" resultType="map">
+        SELECT
+            U.user_seq, U.user_id, U.user_nm, U.mobile_no,
+            U.dept_nm, U.tel_no, U.email, U.reg_dt,
+            UT.user_type_seq, UT.user_type, UT.org_code, UT.org_nm,
+            UT.org_type, UT.dept_code,
+            ISNULL(UT.approval_yn, 'Y') AS approval_yn,
+            UT.approval_user_id, UT.approval_user_nm, UT.approval_dt,
+            RM.role_code,
+            S.sys_id, S.sys_nm
+        FROM TB_USER_INFO U
+        LEFT JOIN TB_USER_TYPE_INFO UT ON U.user_id = UT.user_id
+        LEFT JOIN TB_USER_ROLE_MAP RM ON U.user_id = RM.user_id
+        LEFT JOIN TB_SYS_INFO S ON UT.org_code = S.org_code
+        WHERE U.user_id = #{userId}
+        <if test="sysId != null and sysId != ''">
+            AND S.sys_id = #{sysId}
+        </if>
+    </select>
+
+    <!-- 사용자 등록 -->
+    <insert id="insertMemberInfo" parameterType="map">
+        INSERT INTO TB_USER_INFO (
+            user_id, user_nm, user_pwd, mobile_no, dept_nm,
+            tel_no, email, ci_key, certi_key, reg_dt, reg_ip
+        ) VALUES (
+            #{userId}, #{userNm}, #{userPwd}, #{mobileNo}, #{deptNm},
+            #{telNo}, #{email}, 'cikey', 'certikey', GETDATE(), #{regIp}
+        )
+    </insert>
+
+    <!-- 사용자 유형 등록 -->
+    <insert id="insertMemberTypeInfo" parameterType="map">
+        INSERT INTO TB_USER_TYPE_INFO (
+            user_id, user_type, org_code, org_nm, org_type,
+            dept_code, job_seq, approval_yn,
+            approval_user_id, approval_user_nm, approval_dt, staff_type
+        ) VALUES (
+            #{userId}, #{userType}, #{orgCode}, #{orgNm}, #{orgType},
+            #{jobCode}, 1, #{approvalYn},
+            #{regId}, #{regNm}, GETDATE(), 'S'
+        )
+    </insert>
+
+    <!-- 사용자 정보 수정 -->
+    <update id="updateMemberInfo" parameterType="map">
+        UPDATE TB_USER_INFO SET
+            user_nm   = #{userNm},
+            dept_nm   = #{deptNm},
+            email     = #{email},
+            mobile_no = #{mobileNo},
+            tel_no    = #{telNo}
+            <if test="userPwd != null and userPwd != ''">
+                , user_pwd = #{userPwd}
+            </if>
+        WHERE user_id = #{userId}
+    </update>
+
+    <!-- 사용자 승인 처리 -->
+    <update id="updateMemberApproval" parameterType="map">
+        UPDATE TB_USER_TYPE_INFO SET
+            approval_yn      = #{approvalYn},
+            approval_user_id = #{approvalUserId},
+            approval_user_nm = #{approvalUserNm},
+            approval_dt      = GETDATE()
+        WHERE user_id  = #{userId}
+          AND org_code = (SELECT TOP 1 org_code FROM TB_SYS_INFO WHERE sys_id = #{sysId})
+    </update>
+
+    <!-- 비밀번호 초기화 -->
+    <update id="updateMemberPwd" parameterType="map">
+        UPDATE TB_USER_INFO SET user_pwd = #{userPwd}
+        WHERE user_id = #{userId}
+    </update>
+
+    <!-- 사용자 삭제 -->
+    <delete id="deleteMemberInfo" parameterType="map">
+        DELETE FROM TB_USER_INFO WHERE user_id = #{userId}
+    </delete>
+
+    <!-- 사용자 유형 삭제 -->
+    <delete id="deleteMemberTypeInfo" parameterType="map">
+        DELETE FROM TB_USER_TYPE_INFO
+        WHERE user_id = #{userId}
+        <if test="orgCode != null and orgCode != ''">
+            AND org_code = #{orgCode}
+        </if>
+    </delete>
+
+    <!-- 유형별 사용자 목록 -->
+    <select id="selectMemberListByType" parameterType="map" resultType="map">
+        SELECT U.user_id, U.user_nm, U.tel_no, U.email, U.dept_nm
+        FROM TB_USER_INFO U
+        JOIN TB_USER_TYPE_INFO UT ON U.user_id = UT.user_id
+        WHERE UT.user_type IN (#{userType}, '6')
+        <if test="orgCode != null and orgCode != ''">
+            AND UT.org_code = #{orgCode}
+            AND UT.approval_yn = 'Y'
+        </if>
+        <if test="deptNm != null and deptNm != ''">
+            AND U.dept_nm = #{deptNm}
+        </if>
+        ORDER BY U.user_nm
+    </select>
+
+    <!-- 부서 목록 -->
+    <select id="selectDeptList" parameterType="map" resultType="map">
+        SELECT DISTINCT dept_code, dept_nm
+        FROM TB_DEPT_INFO
+        WHERE org_code = #{orgCode}
+        ORDER BY dept_nm
+    </select>
+
+</mapper>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.helpdesk.user.auth.mapper.LoginMapper">
+
+    <!-- 로그인 - 사용자 정보 조회 -->
+    <select id="selectUserForLogin" parameterType="map" resultType="map">
+        SELECT
+            U.user_seq,
+            U.user_id,
+            U.user_nm,
+            U.mobile_no,
+            U.tel_no,
+            U.email,
+            U.dept_nm,
+            U.reg_dt,
+            #{sysId} AS sys_id,
+            'IT 서비스데스크' AS sys_nm,
+            'Y' AS approval_yn
+        FROM TB_USER_INFO U
+        WHERE U.user_id   = #{userId}
+          AND U.user_pwd  = #{userPwd}
+    </select>
+
+    <!-- 사용자 기본 정보 (ID만) -->
+    <select id="selectUserBaseInfo" parameterType="map" resultType="map">
+        SELECT user_seq, user_id, user_nm, user_pwd, mobile_no, tel_no, email, reg_dt
+        FROM TB_USER_INFO
+        WHERE user_id  = #{userId}
+          AND user_pwd = #{userPwd}
+    </select>
+
+    <!-- 비밀번호 변경 주기 확인 -->
+    <select id="selectPwdChangeInfo" parameterType="map" resultType="map">
+        SELECT COUNT(*) AS change_cnt
+        FROM TB_USER_PWD_HIST
+        WHERE user_id = #{userId}
+          AND reg_dt >= DATEADD(MM, -#{changeCycle}, GETDATE())
+          AND reg_dt &lt;= GETDATE()
+    </select>
+
+    <!-- 사용자 보유 권한 목록 -->
+    <select id="selectUserRoleList" parameterType="map" resultType="map">
+        SELECT
+            R.role_seq,
+            R.role_code,
+            R.role_nm,
+            R.sys_id
+        FROM TB_ROLE_INFO R
+        JOIN TB_USER_ROLE_MAP RM ON R.role_code = RM.role_code AND R.sys_id = RM.sys_id
+        WHERE RM.user_id = #{userId}
+    </select>
+
+    <!-- 승인 대기 회원 수 -->
+    <select id="selectPendingApprovalCount" parameterType="map" resultType="map">
+        SELECT 0 AS pending_cnt
+    </select>
+
+    <!-- 비밀번호 변경 -->
+    <update id="updateUserPwd" parameterType="map">
+        UPDATE TB_USER_INFO
+        SET user_pwd = #{newPwd}
+        WHERE user_id = #{userId}
+    </update>
+
+</mapper>

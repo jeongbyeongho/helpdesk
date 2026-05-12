@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.helpdesk.admin.system.mapper.SystemMapper">
+
+    <!-- 시스템 목록 조회 -->
+    <sql id="selectSystemListSql">
+        SELECT
+            S.sys_id,
+            S.sys_nm,
+            S.sys_type,
+            S.sys_status,
+            S.org_code,
+            S.charger,
+            S.tel_no,
+            S.reg_dt,
+            (SELECT COUNT(*) FROM TB_USER_INFO) AS user_cnt,
+            (SELECT COUNT(*) FROM TB_BOARD_INFO WHERE board_use_yn = 'Y') AS board_cnt,
+            ROW_NUMBER() OVER(ORDER BY S.sys_id DESC) AS rsn
+        FROM TB_SYS_INFO S
+        WHERE S.sys_status = 'O'
+        <if test="keyword != null and keyword != ''">
+            AND (S.sys_nm LIKE CONCAT('%', #{keyword}, '%')
+              OR S.sys_id LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="selectSystemList" parameterType="map" resultType="map">
+        SELECT PL.* FROM (
+            SELECT PO.* FROM ( <include refid="selectSystemListSql"/> ) PO
+        ) PL
+        WHERE rsn &gt; #{minSn} AND rsn &lt;= #{maxSn}
+    </select>
+
+    <select id="selectSystemListCount" parameterType="map" resultType="int">
+        SELECT COUNT(*) FROM TB_SYS_INFO
+        WHERE sys_status = 'O'
+        <if test="keyword != null and keyword != ''">
+            AND (sys_nm LIKE CONCAT('%', #{keyword}, '%')
+              OR sys_id LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <!-- 시스템 상세 조회 -->
+    <select id="selectSystemInfo" parameterType="map" resultType="map">
+        SELECT * FROM TB_SYS_INFO WHERE sys_id = #{sysId}
+    </select>
+
+    <!-- 시스템 ID 중복 체크 -->
+    <select id="checkSystemIdDup" parameterType="map" resultType="int">
+        SELECT COUNT(*) FROM TB_SYS_INFO WHERE sys_id = #{sysId}
+    </select>
+
+    <!-- 시스템 등록 -->
+    <insert id="insertSystemInfo" parameterType="map">
+        INSERT INTO TB_SYS_INFO (
+            sys_id, sys_nm, sys_type, sys_status, sys_purpose,
+            org_code, template_id, template_type, intro_yn,
+            establish_dt, charger, tel_no,
+            reg_id, reg_nm, reg_ip, reg_dt
+        ) VALUES (
+            #{sysId}, #{sysNm}, #{sysType}, 'O', #{sysPurpose},
+            #{orgCode}, #{templateId}, #{templateType}, #{introYn},
+            #{establishDt}, #{charger}, #{telNo},
+            #{regId}, #{regNm}, #{regIp}, GETDATE()
+        )
+    </insert>
+
+    <!-- 시스템 수정 -->
+    <update id="updateSystemInfo" parameterType="map">
+        UPDATE TB_SYS_INFO SET
+            sys_nm = #{sysNm},
+            sys_type = #{sysType},
+            sys_purpose = #{sysPurpose},
+            org_code = #{orgCode},
+            charger = #{charger},
+            tel_no = #{telNo}
+        WHERE sys_id = #{sysId}
+    </update>
+
+    <!-- 시스템 삭제 -->
+    <update id="deleteSystemInfo" parameterType="map">
+        UPDATE TB_SYS_INFO SET sys_status = 'D' WHERE sys_id = #{sysId}
+    </update>
+
+    <!-- 시스템 도메인 목록 -->
+    <select id="selectSystemDomainList" parameterType="map" resultType="map">
+        SELECT
+            domain_seq,
+            sys_id,
+            sys_domain,
+            use_yn
+        FROM TB_SYS_DOMAIN_INFO
+        WHERE sys_id = #{sysId}
+          AND use_yn = 'Y'
+        ORDER BY domain_seq
+    </select>
+
+    <!-- 시스템 도메인 등록 -->
+    <insert id="insertSystemDomainInfo" parameterType="map">
+        INSERT INTO TB_SYS_DOMAIN_INFO (
+            sys_id, sys_domain, use_yn
+        ) VALUES (
+            #{sysId}, #{sysDomain}, 'Y'
+        )
+    </insert>
+
+    <!-- 시스템 도메인 수정 -->
+    <update id="updateSystemDomainInfo" parameterType="map">
+        UPDATE TB_SYS_DOMAIN_INFO SET
+            sys_domain = #{sysDomain}
+        WHERE domain_seq = #{domainSeq}
+    </update>
+
+    <!-- 시스템 도메인 삭제 -->
+    <update id="deleteSystemDomainInfo" parameterType="map">
+        UPDATE TB_SYS_DOMAIN_INFO SET use_yn = 'N' WHERE domain_seq = #{domainSeq}
+    </update>
+
+    <!-- 부서 목록 -->
+    <select id="selectDeptList" parameterType="map" resultType="map">
+        SELECT
+            D.dept_seq,
+            D.org_code,
+            D.dept_code,
+            D.dept_nm,
+            D.reg_dt,
+            (SELECT COUNT(*) FROM TB_USER_INFO WHERE dept_nm = D.dept_nm) AS user_cnt
+        FROM TB_DEPT_INFO D
+        WHERE D.org_code = #{orgCode}
+        ORDER BY D.dept_seq
+    </select>
+
+    <!-- 부서 등록 -->
+    <insert id="insertDeptInfo" parameterType="map">
+        INSERT INTO TB_DEPT_INFO (
+            org_code, dept_code, dept_nm,
+            reg_id, reg_nm, reg_ip, reg_dt
+        ) VALUES (
+            #{orgCode}, #{deptCode}, #{deptNm},
+            #{regId}, #{regNm}, #{regIp}, GETDATE()
+        )
+    </insert>
+
+    <!-- 부서 수정 -->
+    <update id="updateDeptInfo" parameterType="map">
+        UPDATE TB_DEPT_INFO SET
+            dept_code = #{deptCode},
+            dept_nm = #{deptNm}
+        WHERE dept_seq = #{deptSeq}
+    </update>
+
+    <!-- 부서 삭제 -->
+    <delete id="deleteDeptInfo" parameterType="map">
+        DELETE FROM TB_DEPT_INFO WHERE dept_seq = #{deptSeq}
+    </delete>
+
+</mapper>

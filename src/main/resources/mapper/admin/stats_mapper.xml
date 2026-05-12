@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.helpdesk.admin.stats.mapper.StatsMapper">
+
+    <!-- 접속 통계 요약 -->
+    <select id="selectAccessStatsSummary" parameterType="map" resultType="map">
+        SELECT
+            COUNT(DISTINCT user_id) AS totalVisitors,
+            COUNT(*) AS totalPageViews,
+            0 AS avgDuration,
+            COUNT(DISTINCT CASE WHEN connect_type = 'NEW' THEN user_id END) AS newVisitors
+        FROM TB_USER_ACCESS_LOG
+        WHERE connect_dt BETWEEN #{startDate} AND #{endDate}
+    </select>
+
+    <!-- 일별 접속 통계 -->
+    <select id="selectDailyAccessStats" parameterType="map" resultType="map">
+        SELECT
+            CAST(connect_dt AS DATE) AS access_date,
+            COUNT(DISTINCT user_id) AS visitor_cnt,
+            COUNT(*) AS page_view_cnt,
+            COUNT(DISTINCT CASE WHEN connect_type = 'NEW' THEN user_id END) AS new_visitor_cnt,
+            COUNT(DISTINCT CASE WHEN connect_type = 'RETURN' THEN user_id END) AS return_visitor_cnt,
+            0 AS avg_duration
+        FROM TB_USER_ACCESS_LOG
+        WHERE connect_dt BETWEEN #{startDate} AND #{endDate}
+        GROUP BY CAST(connect_dt AS DATE)
+        ORDER BY access_date DESC
+    </select>
+
+    <!-- 페이지별 접속 통계 -->
+    <select id="selectPageAccessStats" parameterType="map" resultType="map">
+        SELECT
+            connect_url AS page_url,
+            connect_url AS page_title,
+            COUNT(*) AS visit_cnt,
+            COUNT(DISTINCT user_id) AS unique_visitor_cnt,
+            0 AS avg_duration
+        FROM TB_USER_ACCESS_LOG
+        WHERE connect_dt BETWEEN #{startDate} AND #{endDate}
+          AND connect_url IS NOT NULL
+        GROUP BY connect_url
+        ORDER BY visit_cnt DESC
+    </select>
+
+    <!-- 메뉴 통계 -->
+    <select id="selectMenuStats" parameterType="map" resultType="map">
+        SELECT
+            M.menu_id,
+            M.menu_nm,
+            COUNT(*) AS access_cnt,
+            CAST(MS.menu_dt AS DATE) AS access_date
+        FROM TB_MENU_STATS_LOG MS
+        JOIN TB_MENU_INFO M ON MS.menu_id = M.menu_id
+        WHERE MS.menu_dt BETWEEN #{startDate} AND #{endDate}
+        <if test="sysId != null and sysId != ''">
+            AND MS.sys_id = #{sysId}
+        </if>
+        GROUP BY M.menu_id, M.menu_nm, CAST(MS.menu_dt AS DATE)
+        ORDER BY access_cnt DESC
+    </select>
+
+    <!-- 방문 통계 -->
+    <select id="selectVisitStats" parameterType="map" resultType="map">
+        SELECT
+            CAST(visit_dt AS DATE) AS visit_date,
+            COUNT(*) AS visit_cnt,
+            COUNT(DISTINCT visit_ip) AS unique_ip_cnt,
+            COUNT(DISTINCT session_id) AS session_cnt
+        FROM TB_VISIT_STATS_LOG
+        WHERE visit_dt BETWEEN #{startDate} AND #{endDate}
+        <if test="sysId != null and sysId != ''">
+            AND sys_id = #{sysId}
+        </if>
+        GROUP BY CAST(visit_dt AS DATE)
+        ORDER BY visit_date DESC
+    </select>
+
+    <!-- 브라우저별 통계 -->
+    <select id="selectBrowserStats" parameterType="map" resultType="map">
+        SELECT
+            browser,
+            browser_ver,
+            COUNT(*) AS cnt,
+            CAST(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM TB_USER_ACCESS_LOG WHERE connect_dt BETWEEN #{startDate} AND #{endDate}) AS DECIMAL(5,2)) AS percentage
+        FROM TB_USER_ACCESS_LOG
+        WHERE connect_dt BETWEEN #{startDate} AND #{endDate}
+          AND browser IS NOT NULL
+        GROUP BY browser, browser_ver
+        ORDER BY cnt DESC
+    </select>
+
+    <!-- OS별 통계 -->
+    <select id="selectOsStats" parameterType="map" resultType="map">
+        SELECT
+            os,
+            os_ver,
+            COUNT(*) AS cnt,
+            CAST(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM TB_USER_ACCESS_LOG WHERE connect_dt BETWEEN #{startDate} AND #{endDate}) AS DECIMAL(5,2)) AS percentage
+        FROM TB_USER_ACCESS_LOG
+        WHERE connect_dt BETWEEN #{startDate} AND #{endDate}
+          AND os IS NOT NULL
+        GROUP BY os, os_ver
+        ORDER BY cnt DESC
+    </select>
+
+    <!-- 관리자 접속 로그 -->
+    <select id="selectAdminAccessLog" parameterType="map" resultType="map">
+        SELECT
+            access_seq,
+            user_id,
+            user_nm,
+            org_code,
+            org_nm,
+            public_ip,
+            private_ip,
+            connect_dt,
+            connect_yn,
+            browser,
+            os,
+            session_id
+        FROM TB_ADMIN_ACCESS_LOG
+        WHERE connect_dt BETWEEN #{startDate} AND #{endDate}
+        ORDER BY connect_dt DESC
+    </select>
+
+    <!-- 접속 로그 등록 -->
+    <insert id="insertUserAccessLog" parameterType="map">
+        INSERT INTO TB_USER_ACCESS_LOG (
+            user_id, user_nm, connect_type, org_code, org_nm,
+            public_ip, private_ip, mac_addr, connect_dt,
+            connect_action, connect_url, browser, terminal,
+            browser_ver, os, os_ver, session_id
+        ) VALUES (
+            #{userId}, #{userNm}, #{connectType}, #{orgCode}, #{orgNm},
+            #{publicIp}, #{privateIp}, #{macAddr}, GETDATE(),
+            #{connectAction}, #{connectUrl}, #{browser}, #{terminal},
+            #{browserVer}, #{os}, #{osVer}, #{sessionId}
+        )
+    </insert>
+
+    <!-- 관리자 접속 로그 등록 -->
+    <insert id="insertAdminAccessLog" parameterType="map">
+        INSERT INTO TB_ADMIN_ACCESS_LOG (
+            user_id, user_nm, org_code, org_nm,
+            public_ip, private_ip, mac_addr, connect_dt, connect_yn,
+            browser, terminal, browser_ver, os, os_ver, session_id
+        ) VALUES (
+            #{userId}, #{userNm}, #{orgCode}, #{orgNm},
+            #{publicIp}, #{privateIp}, #{macAddr}, GETDATE(), #{connectYn},
+            #{browser}, #{terminal}, #{browserVer}, #{os}, #{osVer}, #{sessionId}
+        )
+    </insert>
+
+    <!-- 메뉴 통계 로그 등록 -->
+    <insert id="insertMenuStatsLog" parameterType="map">
+        INSERT INTO TB_MENU_STATS_LOG (
+            menu_dt, menu_id, sys_id
+        ) VALUES (
+            GETDATE(), #{menuId}, #{sysId}
+        )
+    </insert>
+
+    <!-- 방문 통계 로그 등록 -->
+    <insert id="insertVisitStatsLog" parameterType="map">
+        INSERT INTO TB_VISIT_STATS_LOG (
+            visit_dt, sys_id, visit_ip, browser, os,
+            browser_ver, os_ver, terminal, connect_url,
+            refer_url, session_id
+        ) VALUES (
+            GETDATE(), #{sysId}, #{visitIp}, #{browser}, #{os},
+            #{browserVer}, #{osVer}, #{terminal}, #{connectUrl},
+            #{referUrl}, #{sessionId}
+        )
+    </insert>
+
+    <!-- 사용자 접속 로그 목록 -->
+    <sql id="selectUserAccessLogListSql">
+        SELECT
+            access_seq,
+            user_id,
+            user_nm,
+            connect_type,
+            org_code,
+            org_nm,
+            public_ip,
+            private_ip,
+            connect_dt,
+            connect_action,
+            connect_url,
+            browser,
+            os,
+            session_id
+        FROM TB_USER_ACCESS_LOG
+        WHERE 1=1
+        <if test="userId != null and userId != ''">
+            AND user_id LIKE CONCAT('%', #{userId}, '%')
+        </if>
+        <if test="beginDt != null and beginDt != ''">
+            AND connect_dt >= #{beginDt}
+        </if>
+        <if test="endDt != null and endDt != ''">
+            AND connect_dt &lt;= #{endDt}
+        </if>
+    </sql>
+
+    <select id="selectUserAccessLogList" parameterType="map" resultType="map">
+        SELECT PL.* FROM (
+            SELECT PO.*, ROW_NUMBER() OVER(ORDER BY connect_dt DESC) AS rsn
+            FROM ( <include refid="selectUserAccessLogListSql"/> ) PO
+        ) PL
+        WHERE rsn &gt; #{minSn} AND rsn &lt;= #{maxSn}
+    </select>
+
+    <select id="selectUserAccessLogListCount" parameterType="map" resultType="int">
+        SELECT COUNT(*) FROM ( <include refid="selectUserAccessLogListSql"/> ) A
+    </select>
+
+    <!-- 관리자 접속 로그 목록 -->
+    <sql id="selectAdminAccessLogListSql">
+        SELECT
+            access_seq,
+            user_id,
+            user_nm,
+            org_code,
+            org_nm,
+            public_ip,
+            private_ip,
+            connect_dt,
+            connect_yn,
+            browser,
+            os,
+            session_id
+        FROM TB_ADMIN_ACCESS_LOG
+        WHERE 1=1
+        <if test="userId != null and userId != ''">
+            AND user_id LIKE CONCAT('%', #{userId}, '%')
+        </if>
+        <if test="beginDt != null and beginDt != ''">
+            AND connect_dt >= #{beginDt}
+        </if>
+        <if test="endDt != null and endDt != ''">
+            AND connect_dt &lt;= #{endDt}
+        </if>
+    </sql>
+
+    <select id="selectAdminAccessLogList" parameterType="map" resultType="map">
+        SELECT PL.* FROM (
+            SELECT PO.*, ROW_NUMBER() OVER(ORDER BY connect_dt DESC) AS rsn
+            FROM ( <include refid="selectAdminAccessLogListSql"/> ) PO
+        ) PL
+        WHERE rsn &gt; #{minSn} AND rsn &lt;= #{maxSn}
+    </select>
+
+    <select id="selectAdminAccessLogListCount" parameterType="map" resultType="int">
+        SELECT COUNT(*) FROM ( <include refid="selectAdminAccessLogListSql"/> ) A
+    </select>
+
+    <!-- 게시물 상태별 통계 -->
+    <select id="selectPostStatusStats" parameterType="map" resultType="map">
+        SELECT
+            COUNT(CASE WHEN board_status = 'W' THEN 1 END) AS wait_cnt,
+            COUNT(CASE WHEN board_status = 'R' THEN 1 END) AS proc_cnt,
+            COUNT(CASE WHEN board_status = 'C' THEN 1 END) AS comp_cnt,
+            COUNT(CASE WHEN board_status = 'H' THEN 1 END) AS hold_cnt,
+            COUNT(*) AS total_cnt
+        FROM TB_BOARD_INFO
+        WHERE 1=1
+        <if test="sysId != null and sysId != ''">
+            AND sys_id = #{sysId}
+        </if>
+    </select>
+
+    <!-- 일별 통계 -->
+    <select id="selectDailyStats" parameterType="map" resultType="map">
+        SELECT
+            CAST(GETDATE() AS DATE) AS stat_date,
+            COUNT(DISTINCT user_id) AS user_cnt,
+            COUNT(*) AS access_cnt,
+            0 AS board_cnt
+        FROM TB_USER_ACCESS_LOG
+        WHERE CAST(connect_dt AS DATE) = CAST(GETDATE() AS DATE)
+    </select>
+
+    <!-- 방문 통계 목록 -->
+    <select id="selectVisitStatsList" parameterType="map" resultType="map">
+        SELECT
+            CAST(visit_dt AS DATE) AS visit_date,
+            COUNT(*) AS visit_cnt,
+            COUNT(DISTINCT visit_ip) AS unique_ip_cnt,
+            COUNT(DISTINCT session_id) AS session_cnt
+        FROM TB_VISIT_STATS_LOG
+        WHERE 1=1
+        <if test="beginDt != null and beginDt != ''">
+            AND visit_dt >= #{beginDt}
+        </if>
+        <if test="endDt != null and endDt != ''">
+            AND visit_dt &lt;= #{endDt}
+        </if>
+        <if test="sysId != null and sysId != ''">
+            AND sys_id = #{sysId}
+        </if>
+        GROUP BY CAST(visit_dt AS DATE)
+        ORDER BY visit_date DESC
+    </select>
+
+    <!-- 메뉴 통계 목록 -->
+    <select id="selectMenuStatsList" parameterType="map" resultType="map">
+        SELECT
+            M.menu_id,
+            M.menu_nm,
+            COUNT(*) AS access_cnt,
+            CAST(MS.menu_dt AS DATE) AS access_date
+        FROM TB_MENU_STATS_LOG MS
+        LEFT JOIN TB_MENU_INFO M ON MS.menu_id = M.menu_id
+        WHERE 1=1
+        <if test="beginDt != null and beginDt != ''">
+            AND MS.menu_dt >= #{beginDt}
+        </if>
+        <if test="endDt != null and endDt != ''">
+            AND MS.menu_dt &lt;= #{endDt}
+        </if>
+        <if test="sysId != null and sysId != ''">
+            AND MS.sys_id = #{sysId}
+        </if>
+        GROUP BY M.menu_id, M.menu_nm, CAST(MS.menu_dt AS DATE)
+        ORDER BY access_cnt DESC
+    </select>
+
+</mapper>

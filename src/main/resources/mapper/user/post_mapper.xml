@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.helpdesk.user.post.mapper.PostMapper">
+
+    <!-- 게시물 목록 (페이징) -->
+    <select id="selectPostList" parameterType="map" resultType="map">
+        SELECT *
+        FROM (
+            SELECT 
+                P.post_seq,
+                P.board_id,
+                P.post_title,
+                P.reg_id,
+                P.reg_nm,
+                P.reg_dt,
+                P.read_cnt,
+                P.post_status,
+                P.post_use_yn,
+                P.secret_yn,
+                P.notice_yn,
+                P.notice_begin_dt,
+                P.notice_end_dt,
+                P.extra_col1,
+                P.extra_col2,
+                P.extra_col3,
+                P.extra_col4,
+                P.extra_col5,
+                (SELECT COUNT(*) FROM TB_POST_FILE_INFO F WHERE F.post_seq = P.post_seq AND F.board_id = P.board_id) AS file_cnt,
+                (SELECT COUNT(*) FROM TB_POST_REPLY_INFO R WHERE R.post_seq = P.post_seq AND R.board_id = P.board_id AND R.reply_use_yn = 'Y') AS reply_cnt,
+                ROW_NUMBER() OVER(ORDER BY
+                    CASE WHEN P.notice_yn = 'Y'
+                         AND GETDATE() BETWEEN P.notice_begin_dt AND DATEADD(DAY,1,P.notice_end_dt)
+                         THEN 0 ELSE 1 END,
+                    P.post_seq DESC
+                ) AS rn
+            FROM TB_POST_INFO P
+            WHERE P.board_id = #{boardId}
+              AND P.post_use_yn = 'Y'
+            <if test="postStatus != null and postStatus != ''">
+                AND P.post_status = #{postStatus}
+            </if>
+            <if test="searchType != null and searchType != '' and keyword != null and keyword != ''">
+                <choose>
+                    <when test='searchType == "title"'>
+                        AND P.post_title LIKE '%' + #{keyword} + '%'
+                    </when>
+                    <when test='searchType == "content"'>
+                        AND P.post_content LIKE '%' + #{keyword} + '%'
+                    </when>
+                    <when test='searchType == "regNm"'>
+                        AND P.reg_nm LIKE '%' + #{keyword} + '%'
+                    </when>
+                    <when test='searchType == "all"'>
+                        AND (P.post_title LIKE '%' + #{keyword} + '%'
+                          OR P.post_content LIKE '%' + #{keyword} + '%'
+                          OR P.reg_nm LIKE '%' + #{keyword} + '%')
+                    </when>
+                    <when test='searchType == "extra_col1"'>
+                        AND P.extra_col1 LIKE '%' + #{keyword} + '%'
+                    </when>
+                    <when test='searchType == "extra_col2"'>
+                        AND P.extra_col2 LIKE '%' + #{keyword} + '%'
+                    </when>
+                </choose>
+            </if>
+            <if test='searchOnlyMine != null and searchOnlyMine == "Y"'>
+                AND P.reg_id = #{userId}
+            </if>
+        ) AS numbered
+        WHERE rn <![CDATA[>]]> #{minSn} AND rn <![CDATA[<=]]> #{maxSn}
+    </select>
+
+    <!-- 게시물 전체 건수 -->
+    <select id="selectPostListCount" parameterType="map" resultType="int">
+        SELECT COUNT(*)
+        FROM TB_POST_INFO P
+        WHERE P.board_id = #{boardId}
+          AND P.post_use_yn = 'Y'
+        <if test="postStatus != null and postStatus != ''">
+            AND P.post_status = #{postStatus}
+        </if>
+        <if test="searchType != null and searchType != '' and keyword != null and keyword != ''">
+            <choose>
+                <when test='searchType == "title"'>
+                    AND P.post_title LIKE '%' + #{keyword} + '%'
+                </when>
+                <when test='searchType == "content"'>
+                    AND P.post_content LIKE '%' + #{keyword} + '%'
+                </when>
+                <when test='searchType == "regNm"'>
+                    AND P.reg_nm LIKE '%' + #{keyword} + '%'
+                </when>
+                <when test='searchType == "all"'>
+                    AND (P.post_title LIKE '%' + #{keyword} + '%'
+                      OR P.post_content LIKE '%' + #{keyword} + '%'
+                      OR P.reg_nm LIKE '%' + #{keyword} + '%')
+                </when>
+                <when test='searchType == "extra_col1"'>
+                    AND P.extra_col1 LIKE '%' + #{keyword} + '%'
+                </when>
+                <when test='searchType == "extra_col2"'>
+                    AND P.extra_col2 LIKE '%' + #{keyword} + '%'
+                </when>
+            </choose>
+        </if>
+        <if test='searchOnlyMine != null and searchOnlyMine == "Y"'>
+            AND P.reg_id = #{userId}
+        </if>
+    </select>
+
+    <!-- 게시물 상세 조회 -->
+    <select id="selectPostInfo" parameterType="map" resultType="map">
+        SELECT
+            P.*,
+            B.board_title,
+            B.status_use_yn,
+            B.editor_use_yn,
+            B.reply_yn,
+            B.secret_use_yn
+        FROM TB_POST_INFO P
+        JOIN TB_BOARD_INFO B ON P.board_id = B.board_id
+        WHERE P.post_seq = #{postSeq}
+          AND P.board_id = #{boardId}
+    </select>
+
+    <!-- 게시물 등록 -->
+    <insert id="insertPostInfo" parameterType="map" useGeneratedKeys="true" keyProperty="postSeq" keyColumn="post_seq">
+        <![CDATA[
+        INSERT INTO TB_POST_INFO (
+            board_id, post_title, post_content,
+            reg_id, reg_nm, reg_ip, reg_dt,
+            post_status, post_use_yn, secret_yn, notice_yn,
+            read_cnt, oppose_cnt, approve_cnt
+        ) VALUES (
+            #{boardId}, #{postTitle}, #{postContent},
+            #{regId}, #{regNm}, #{regIp}, GETDATE(),
+            #{postStatus}, 'Y', #{secretYn}, #{noticeYn},
+            0, 0, 0
+        )
+        ]]>
+    </insert>
+
+    <!-- 게시물 수정 -->
+    <update id="updatePostInfo" parameterType="map">
+        UPDATE TB_POST_INFO SET
+            post_title    = #{postTitle},
+            post_content  = #{postContent},
+            secret_yn     = #{secretYn},
+            notice_yn     = #{noticeYn},
+            notice_begin_dt = #{noticeBeginDt},
+            notice_end_dt   = #{noticeEndDt},
+            extra_col1    = #{extraCol1},
+            extra_col2    = #{extraCol2},
+            extra_col3    = #{extraCol3},
+            extra_col4    = #{extraCol4},
+            extra_col5    = #{extraCol5}
+        WHERE post_seq = #{postSeq}
+          AND board_id = #{boardId}
+    </update>
+
+    <!-- 게시물 상태 변경 -->
+    <update id="updatePostStatus" parameterType="map">
+        UPDATE TB_POST_INFO SET
+            post_status = #{postStatus},
+            status_dt   = GETDATE()
+        WHERE post_seq = #{postSeq}
+          AND board_id = #{boardId}
+    </update>
+
+    <!-- 조회수 증가 -->
+    <update id="updateReadCount" parameterType="map">
+        UPDATE TB_POST_INFO SET read_cnt = read_cnt + 1
+        WHERE post_seq = #{postSeq} AND board_id = #{boardId}
+    </update>
+
+    <!-- 게시물 삭제 (논리) -->
+    <update id="deletePostInfo" parameterType="map">
+        UPDATE TB_POST_INFO SET post_use_yn = 'N'
+        WHERE post_seq = #{postSeq} AND board_id = #{boardId}
+    </update>
+
+    <!-- 답변 목록 -->
+    <select id="selectReplyList" parameterType="map" resultType="map">
+        SELECT reply_seq, board_id, post_seq, upper_reply_seq,
+               reply_title, reply_content, reply_nm, work_dt,
+               reg_id, reg_nm, reg_dt, reply_status, secret_yn
+        FROM TB_POST_REPLY_INFO
+        WHERE post_seq    = #{postSeq}
+          AND board_id    = #{boardId}
+          AND reply_use_yn = 'Y'
+        ORDER BY reply_seq ASC
+    </select>
+
+    <!-- 답변 상세 -->
+    <select id="selectReplyInfo" parameterType="map" resultType="map">
+        SELECT * FROM TB_POST_REPLY_INFO
+        WHERE reply_seq = #{replySeq}
+          AND board_id  = #{boardId}
+    </select>
+
+    <!-- 답변 등록 -->
+    <insert id="insertReplyInfo" parameterType="map" useGeneratedKeys="true" keyProperty="replySeq">
+        INSERT INTO TB_POST_REPLY_INFO (
+            board_id, post_seq, upper_reply_seq,
+            reply_title, reply_content, reply_nm, work_dt,
+            reg_id, reg_nm, reg_ip, reg_dt,
+            reply_status, reply_use_yn, secret_yn
+        ) VALUES (
+            #{boardId}, #{postSeq}, #{upperReplySeq},
+            #{replyTitle}, #{replyContent}, #{replyNm}, #{workDt},
+            #{regId}, #{regNm}, #{regIp}, GETDATE(),
+            #{replyStatus}, 'Y', #{secretYn}
+        )
+    </insert>
+
+    <!-- 답변 수정 -->
+    <update id="updateReplyInfo" parameterType="map">
+        UPDATE TB_POST_REPLY_INFO SET
+            reply_title   = #{replyTitle},
+            reply_content = #{replyContent},
+            reply_nm      = #{replyNm},
+            work_dt       = #{workDt},
+            reply_status  = #{replyStatus}
+        WHERE reply_seq = #{replySeq}
+          AND board_id  = #{boardId}
+    </update>
+
+    <!-- 답변 삭제 (논리) -->
+    <update id="deleteReplyInfo" parameterType="map">
+        UPDATE TB_POST_REPLY_INFO SET reply_use_yn = 'N'
+        WHERE reply_seq = #{replySeq} AND board_id = #{boardId}
+    </update>
+
+    <!-- 파일 목록 -->
+    <select id="selectFileList" parameterType="map" resultType="map">
+        SELECT file_seq, board_id, post_seq, file_nm, file_path,
+               file_size, download_cnt, file_ext, thumb_path, file_type
+        FROM TB_POST_FILE_INFO
+        WHERE post_seq = #{postSeq} AND board_id = #{boardId}
+        ORDER BY file_seq ASC
+    </select>
+
+    <!-- 파일 상세 -->
+    <select id="selectFileInfo" parameterType="map" resultType="map">
+        SELECT * FROM TB_POST_FILE_INFO
+        WHERE file_seq = #{fileSeq}
+    </select>
+
+    <!-- 파일 등록 -->
+    <insert id="insertFileInfo" parameterType="map" useGeneratedKeys="true" keyProperty="fileSeq">
+        INSERT INTO TB_POST_FILE_INFO (
+            board_id, post_seq, file_nm, file_path,
+            file_size, download_cnt, file_ext, thumb_path, file_type
+        ) VALUES (
+            #{boardId}, #{postSeq}, #{fileNm}, #{filePath},
+            #{fileSize}, 0, #{fileExt}, #{thumbPath}, #{fileType}
+        )
+    </insert>
+
+    <!-- 파일 삭제 -->
+    <delete id="deleteFileInfo" parameterType="map">
+        DELETE FROM TB_POST_FILE_INFO
+        WHERE file_seq = #{fileSeq} AND board_id = #{boardId}
+    </delete>
+
+    <!-- 다운로드 수 증가 -->
+    <update id="updateDownloadCount" parameterType="map">
+        UPDATE TB_POST_FILE_INFO SET download_cnt = download_cnt + 1
+        WHERE file_seq = #{fileSeq}
+    </update>
+
+</mapper>
